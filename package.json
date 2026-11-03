@@ -1,6 +1,6 @@
 {
   "name": "decky-depth3d-glasses",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Marks Steam games that have a Depth3D (SuperDepth3D) profile and installs ReShade + SuperDepth3D for SBS 3D on XR glasses",
   "type": "module",
   "scripts": {

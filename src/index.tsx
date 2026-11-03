@@ -9,6 +9,7 @@ import {
   updateShaders,
 } from "./backend";
 import { openGameModal } from "./GameModal";
+import { t, tr } from "./i18n";
 import { patchLibraryApp, unpatchLibraryApp } from "./libraryPatch";
 import {
   afterLaunch, beforeLaunch, initSteamStores, restoreSteamSettings, restoreSteamSettingsSync, syncOutputMode,
@@ -43,23 +44,25 @@ function backgroundScan(): Promise<unknown> {
 }
 
 function displayText(d: DisplayInfo | null): { label: string; description: string } {
-  if (!d || !d.connected) return { label: "не найден", description: "Нет подключённых экранов" };
+  if (!d || !d.connected) return { label: t("not found", "не найден"), description: t("No displays connected", "Нет подключённых экранов") };
   const where = d.connector ? ` (${d.connector})` : "";
   if (d.is_glasses) {
     const gs = d.gamescope_sbs;
     return {
       label: `${d.name}${where}`,
       description: gs?.needed && !gs.ready
-        ? "Очки · для 3D нужен перезапуск игрового режима (один раз)"
-        : "Очки · игры с включённым 3D запустятся в 3D. Режим 3D на очках включается кнопкой",
+        ? t("Glasses · 3D needs a Game Mode restart (once)", "Очки · для 3D нужен перезапуск игрового режима (один раз)")
+        : t("Glasses · games with 3D on start in 3D. The glasses' 3D mode is switched with their button",
+          "Очки · игры с включённым 3D запустятся в 3D. Режим 3D на очках включается кнопкой"),
     };
   }
-  const unsure = d.source === "drm-ambiguous" ? " Подключено несколько экранов, gamescope не подсказал активный." : "";
-  return { label: `${d.name}${where}`, description: `Монитор · только 2D.${unsure}` };
+  const unsure = d.source === "drm-ambiguous"
+    ? t(" Several displays are connected and gamescope did not say which is active.", " Подключено несколько экранов, gamescope не подсказал активный.") : "";
+  return { label: `${d.name}${where}`, description: t("Monitor · 2D only.", "Монитор · только 2D.") + unsure };
 }
 
 function fmtDate(ts: number | null | undefined) {
-  if (!ts) return "никогда";
+  if (!ts) return t("never", "никогда");
   return new Date(ts * 1000).toLocaleString();
 }
 
@@ -112,7 +115,7 @@ function Content() {
 
   return (
     <>
-      <PanelSection title="Экран">
+      <PanelSection title={t("Display", "Экран")}>
         <PanelSectionRow>
           <Field label={dt.label} description={dt.description}>
             <FaGlasses color={display?.is_glasses ? "#1a9fff" : "#8b929a"} />
@@ -121,7 +124,7 @@ function Content() {
         {display?.connected && !userMarked && (
           <PanelSectionRow>
             <ButtonItem layout="below" disabled={!!busy} onClick={() => markAs(display.is_glasses ? "screen" : "glasses")}>
-              {display.is_glasses ? "Это не очки, а монитор" : "Это мои XR-очки"}
+              {display.is_glasses ? t("These are not glasses, it is a monitor", "Это не очки, а монитор") : t("These are my XR glasses", "Это мои XR-очки")}
             </ButtonItem>
           </PanelSectionRow>
         )}
@@ -130,36 +133,36 @@ function Content() {
             <ButtonItem
               layout="below"
               disabled={!!busy}
-              description="gamescope подхватит режим 3840×1080 для очков. Steam перезапустится, игры закрой заранее"
+              description={t("gamescope picks up the 3840×1080 mode for the glasses. Steam restarts, close games first", "gamescope подхватит режим 3840×1080 для очков. Steam перезапустится, игры закрой заранее")}
               onClick={() => run("restart", restartSession)}
             >
-              Перезапустить игровой режим
+              {t("Restart Game Mode", "Перезапустить игровой режим")}
             </ButtonItem>
           </PanelSectionRow>
         )}
         {userMarked && (
           <PanelSectionRow>
             <ButtonItem layout="below" disabled={!!busy} onClick={() => markAs("auto")}>
-              Определять этот экран автоматически
+              {t("Detect this display automatically", "Определять этот экран автоматически")}
             </ButtonItem>
           </PanelSectionRow>
         )}
       </PanelSection>
 
-      <PanelSection title="Профили Depth3D">
+      <PanelSection title={t("Depth3D profiles", "Профили Depth3D")}>
         {state && !state.ok && (
-          <PanelSectionRow><Field label="Ошибка">{state.error}</Field></PanelSectionRow>
+          <PanelSectionRow><Field label={t("Error", "Ошибка")}>{state.error}</Field></PanelSectionRow>
         )}
         <PanelSectionRow>
-          <Field label="Overwatch" description={ok ? `${ok.profiles} профилей` : undefined}>
-            {ok?.overwatch ?? "не скачан"}
+          <Field label="Overwatch" description={ok ? t(`${ok.profiles} profiles`, `${ok.profiles} профилей`) : undefined}>
+            {ok?.overwatch ?? t("not downloaded", "не скачан")}
           </Field>
         </PanelSectionRow>
         <PanelSectionRow>
-          <Field label="ReShade">{ok?.assets.reshade ?? "скачается при установке"}</Field>
+          <Field label="ReShade">{ok?.assets.reshade ?? t("downloaded on install", "скачается при установке")}</Field>
         </PanelSectionRow>
         <PanelSectionRow>
-          <Field label="Последнее сканирование">{fmtDate(ok?.scanned_at)}</Field>
+          <Field label={t("Last scan", "Последнее сканирование")}>{fmtDate(ok?.scanned_at)}</Field>
         </PanelSectionRow>
         {progress && (
           <PanelSectionRow>
@@ -174,10 +177,10 @@ function Content() {
           <ButtonItem
             layout="below"
             disabled={!!busy}
-            description="Игры Steam и сторонние (non-Steam) игры. Само обновляется при запуске Steam"
+            description={t("Steam and non-Steam games. Updates by itself when Steam starts", "Игры Steam и сторонние (non-Steam) игры. Само обновляется при запуске Steam")}
             onClick={() => run("scan", () => backgroundScan())}
           >
-            {busy === "scan" ? "Ищу игры…" : "Обновить список игр"}
+            {busy === "scan" ? t("Looking for games…", "Ищу игры…") : t("Update game list", "Обновить список игр")}
           </ButtonItem>
         </PanelSectionRow>
         <PanelSectionRow>
@@ -189,26 +192,26 @@ function Content() {
               return r.ok ? scan(true) : r;
             })}
           >
-            {busy === "shaders" ? "Обновляю…" : "Обновить профили и пересканировать"}
+            {busy === "shaders" ? t("Updating…", "Обновляю…") : t("Update profiles and rescan", "Обновить профили и пересканировать")}
           </ButtonItem>
         </PanelSectionRow>
         <PanelSectionRow>
           <ButtonItem layout="below" disabled={!!busy} onClick={() => run("reshade", updateReshade)}>
-            {busy === "reshade" ? "Проверяю…" : "Проверить обновление ReShade"}
+            {busy === "reshade" ? t("Checking…", "Проверяю…") : t("Check for a ReShade update", "Проверить обновление ReShade")}
           </ButtonItem>
         </PanelSectionRow>
       </PanelSection>
 
-      <PanelSection title={`Игры с профилем (${usable.length})`}>
+      <PanelSection title={t(`Games with a profile (${usable.length})`, `Игры с профилем (${usable.length})`)}>
         {visible.length === 0 && (
           <PanelSectionRow>
-            <Field label="Пока пусто">Запусти сканирование</Field>
+            <Field label={t("Nothing yet", "Пока пусто")}>{t("Run a scan", "Запусти сканирование")}</Field>
           </PanelSectionRow>
         )}
         {visible.map((g) => {
           const mode = launchMode(g, display);
-          const desc = (g.installed ? MODE_TEXT[mode] : STATUS_TEXT[g.status]) +
-            (g.kind === "shortcut" ? " · сторонняя" : "");
+          const desc = tr(g.installed ? MODE_TEXT[mode] : STATUS_TEXT[g.status]) +
+            (g.kind === "shortcut" ? t(" · non-Steam", " · сторонняя") : "");
           return (
             <PanelSectionRow key={g.appid}>
               <ButtonItem layout="below" onClick={() => openGameModal(g.appid)} description={desc}>
@@ -227,50 +230,53 @@ function Content() {
               disabled={!!busy}
               onClick={() => run("collection", async () => {
                 const n = await syncCollection(usable.map((g) => g.appid));
-                toaster.toast({ title: "Depth3D Glasses", body: `Коллекция «${COLLECTION_NAME}»: ${n} игр` });
+                toaster.toast({ title: "Depth3D Glasses", body: t(`Collection "${COLLECTION_NAME}": ${n} games`, `Коллекция «${COLLECTION_NAME}»: ${n} игр`) });
               })}
             >
-              {`Собрать коллекцию «${COLLECTION_NAME}»`}
+              {t(`Build the "${COLLECTION_NAME}" collection`, `Собрать коллекцию «${COLLECTION_NAME}»`)}
             </ButtonItem>
           </PanelSectionRow>
         )}
       </PanelSection>
 
-      <PanelSection title="Настройки">
+      <PanelSection title={t("Settings", "Настройки")}>
         <PanelSectionRow>
           <ToggleField
-            label="Показывать онлайн-игры"
-            description="Игры, которые Overwatch помечает как сетевые (риск античита)"
+            label={t("Show online games", "Показывать онлайн-игры")}
+            description={t("Games Overwatch marks as online (anti-cheat risk)", "Игры, которые Overwatch помечает как сетевые (риск античита)")}
             checked={settings?.show_network_games ?? true}
             onChange={(v) => run("setting", () => setSetting("show_network_games", v))}
           />
         </PanelSectionRow>
         <PanelSectionRow>
           <ToggleField
-            label="Вывод 3840×1080, когда очки в 3D"
-            description="Steam сам переключает разрешение экрана на SBS-режим очков и возвращает прежнее в 2D"
+            label={t("3840×1080 output while the glasses are in 3D", "Вывод 3840×1080, когда очки в 3D")}
+            description={t("Steam switches the display to the glasses' SBS mode and back in 2D", "Steam сам переключает разрешение экрана на SBS-режим очков и возвращает прежнее в 2D")}
             checked={settings?.auto_sbs_output ?? true}
             onChange={(v) => run("setting", () => setSetting("auto_sbs_output", v))}
           />
         </PanelSectionRow>
         <PanelSectionRow>
           <ToggleField
-            label="ReShade с поддержкой аддонов"
-            description="Нужно для Generic Depth Mod и свежих фиксов DX12. Только для одиночных игр"
+            label={t("ReShade with add-on support", "ReShade с поддержкой аддонов")}
+            description={t("Needed for the Generic Depth mod and recent DX12 fixes. Single-player games only", "Нужно для Generic Depth Mod и свежих фиксов DX12. Только для одиночных игр")}
             checked={settings?.reshade_addon ?? true}
             onChange={(v) => run("setting", () => setSetting("reshade_addon", v))}
           />
         </PanelSectionRow>
       </PanelSection>
 
-      <PanelSection title="Очки (SBS)">
+      <PanelSection title={t("Glasses (SBS)", "Очки (SBS)")}>
         <PanelSectionRow>
           <div style={{ fontSize: 12, lineHeight: 1.5, color: "#b8bcbf" }}>
-            1. Переведи очки в 3D-режим кнопкой на очках. Steam сам переключит вывод на 3840×1080.<br />
-            2. Запусти игру с включённым 3D: плагин выставит ей 1920×1080 и масштабирование «Растянуть»,
-            а при запуске в 2D вернёт как было.<br />
-            3. На мониторе или с очками в 2D игра запускается в обычном 2D без ReShade.<br />
-            4. Меню ReShade — клавиша Home. Профиль подхватится сам.
+            {t("1. Switch the glasses to 3D with their button. Steam switches the output to 3840×1080.",
+              "1. Переведи очки в 3D-режим кнопкой на очках. Steam сам переключит вывод на 3840×1080.")}<br />
+            {t("2. Start a game with 3D on: the plugin sets it to 1920×1080 with \"Stretch\" scaling and restores it for 2D.",
+              "2. Запусти игру с включённым 3D: плагин выставит ей 1920×1080 и масштабирование «Растянуть», а при запуске в 2D вернёт как было.")}<br />
+            {t("3. On a monitor, or with the glasses in 2D, the game starts in plain 2D without ReShade.",
+              "3. На мониторе или с очками в 2D игра запускается в обычном 2D без ReShade.")}<br />
+            {t("4. The ReShade menu is the Home key. The profile loads by itself.",
+              "4. Меню ReShade — клавиша Home. Профиль подхватится сам.")}
           </div>
         </PanelSectionRow>
       </PanelSection>

@@ -58,7 +58,7 @@ export async function applyLaunchWrapper(appid: number, token: string): Promise<
   const manual = `${token} %command%`;
   const cur = await currentLaunchOptions(appid);
   if (cur === null) {
-    return { applied: false, reason: "Не удалось прочитать текущие параметры запуска", manual };
+    return { applied: false, reason: "Could not read the current launch options", manual };
   }
   const next = addLaunchWrapper(cur, token);
   try {
@@ -119,7 +119,7 @@ export function removeWrapperFromGamesSync(games: { appid: number; launch_token?
 
 /** Creates or refills a Steam collection with the given games. Returns how many were added. */
 export async function syncCollection(appids: number[]): Promise<number> {
-  if (typeof collectionStore === "undefined") throw new Error("collectionStore недоступен в этой версии Steam");
+  if (typeof collectionStore === "undefined") throw new Error("collectionStore is not available in this Steam version");
   const overviews = appids
     .map((id) => appStore?.GetAppOverviewByAppID?.(id))
     .filter((o: any) => !!o);
@@ -130,7 +130,7 @@ export async function syncCollection(appids: number[]): Promise<number> {
   );
   if (existing) {
     const dd = existing.AsDragDropCollection?.();
-    if (!dd?.AddApps) throw new Error("Коллекцию нельзя изменить (это динамическая коллекция?)");
+    if (!dd?.AddApps) throw new Error("The collection cannot be changed (is it a dynamic collection?)");
     dd.AddApps(overviews);
     await existing.Save?.();
   } else {

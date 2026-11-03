@@ -1,115 +1,160 @@
-# Depth3D Glasses — Decky-плагин
+# Depth3D Glasses — a Decky Loader plugin
 
-**English summary.** A [Decky Loader](https://decky.xyz) plugin for playing ordinary PC games in pseudo-3D (side-by-side)
-on XR glasses such as the VITURE Luma Pro. It marks games in the Steam library (Steam and non-Steam) that have a ready
-[Depth3D / SuperDepth3D](https://github.com/BlueSkyDefender/Depth3D) profile, installs ReShade + SuperDepth3D into a
-game with one button, and on every launch decides between 3D (glasses connected) and clean 2D (monitor, no ReShade
-loaded). While the glasses are in 3D it switches Steam's output to 3840×1080 and, for glasses whose EDID lacks that
-mode, generates it through a gamescope script. ReShade, the Depth3D shaders and `d3dcompiler_47.dll` are downloaded
-on the user's machine from their official sources and are never part of this repository or its releases
-(Depth3D is free for personal use, without redistribution). Install the release ZIP via Decky → Settings →
-Developer → *Install Plugin from ZIP*. Not affiliated with VITURE, ReShade or BlueSkyDefender. Documentation below
-is in Russian.
+Play ordinary PC games in pseudo-3D (side-by-side) on XR glasses such as the VITURE Luma Pro, from Steam's Game Mode.
+The plugin marks games in the Steam library that have a ready [Depth3D / SuperDepth3D](https://github.com/BlueSkyDefender/Depth3D)
+profile and installs ReShade + SuperDepth3D into them with one button, for SBS 3D on any glasses with a 3840×1080 mode.
+The UI follows Steam's language (English or Russian).
 
----
+## What it does
 
-Помечает в библиотеке Steam игры, для которых у Depth3D (SuperDepth3D) есть готовый профиль, и одной кнопкой ставит в них ReShade + SuperDepth3D для SBS-3D на XR-очках (VITURE Luma Pro и любые другие с режимом 3840×1080).
+- **Scans installed games — Steam and non-Steam.** Reads `libraryfolders.vdf`, `appmanifest_*.acf` and the active account's
+  `shortcuts.vdf` (Windows games added to Steam as non-Steam games and run through Proton), finds every `.exe`, computes for
+  each the same hash ReShade puts into `__APPLICATION__`, and looks it up in the profile table of `Overwatch.fxh`.
+- **The list updates itself** when Steam starts (only new and changed games, instant). The "Update game list" button in the
+  panel is for a game you have just added.
+- **Glasses icon on the game page.** Its colour shows the status: green — a profile exists; yellow — a profile exists but the
+  game is online; red — Depth3D marked the game incompatible; grey — the game is known but has no profile; blue — 3D is
+  installed. Pressing it opens the install dialog.
+- **List in the side panel**, and a "Build the 3D Glasses collection" button — a library tab with every game that has a profile.
+- **Installing into a game.** Puts `dxgi.dll` / `d3d9.dll` / `opengl32.dll` (ReShade of the right bitness), `d3dcompiler_47.dll`,
+  `ReShade.ini` and `ReShadePreset.ini` with SuperDepth3D enabled in Side-by-Side mode next to the exe, and adds the plugin's
+  wrapper to the launch options: `"~/homebrew/data/depth3d-glasses/bin/depth3d-run" <appid> %command%`. Files of the same
+  name that were already there are kept as `*.depth3d-bak` and restored on removal.
+- **3D or 2D on every launch.** The wrapper checks whether 3D is on for the game ("3D in this game" in the game dialog) and
+  which display gamescope is driving. Glasses → 3D. A monitor, or 3D off → plain 2D **without ReShade**: before the launch the
+  ReShade DLLs are renamed to `*.depth3d-off`, the game's own files (if the plugin kept any) are put back, nothing is added
+  to the environment — the game runs as if the plugin were not there, with no performance cost. These are renames only and
+  take milliseconds. If the game folder cannot be changed, the fallback loads ReShade with an empty profile through
+  `RESHADE_BASE_PATH_OVERRIDE`. Your own launch options (`gamemoderun`, your own `WINEDLLOVERRIDES`, …) are kept.
+- **Resolution in 3D** is chosen in the game dialog: 1920×1080 (960 px per eye), 2560×1440 (1280), 3200×1800 (1600) or
+  3840×2160 (the full 1920 per eye). SuperDepth3D draws half-SBS, so sharpness in the glasses depends on the render width;
+  the output to the glasses stays 3840×1080. It is set only for a 3D launch; in 2D the game's usual resolution is back.
+- **SBS signal for glasses without a 3840 mode in their EDID (VITURE).** Such glasses switch to 3D with a button (Luma: hold
+  R1) but still report only 1920×1080 to the computer, while they expect 3840×1080. The plugin installs a gamescope script
+  (`~/.config/gamescope/scripts/depth3d-glasses.lua`) that can generate a 3840×1080@60 mode and asks gamescope to use it while
+  a 3D game runs. After the game the output returns to plain 1920×1080. gamescope loads the script after a Game Mode restart
+  (a button in the plugin panel, once).
+- **The glasses' 3D mode and Steam.** For glasses that report a 3840-wide mode in 3D themselves, the plugin switches Steam's
+  output to 3840×1080 (like Settings → Display → Resolution) and back when the glasses return to 2D. A game launched in 3D
+  gets a 1920×1080 resolution and "Stretch" scaling (SuperDepth3D draws half-SBS, each half is stretched to a 1920×1080 eye);
+  a 2D launch restores its previous settings.
+- **Display detection.** The EDID of gamescope's active output (`GAMESCOPE_PATCHED_EDID_FILE`, by default
+  `~/.config/gamescope/edid.bin`) is matched against the connectors in `/sys/class/drm`. Glasses are recognised by the EDID
+  name: VITURE, XREAL/Nreal, Rokid, RayNeo. Any other display can be marked in the panel with "These are my XR glasses" (and
+  the other way round). With several displays and no hint from gamescope, a monitor is assumed — 3D never goes to a monitor.
+- **Removal** returns the game folder to its original state and takes the wrapper out of the launch options.
+- **Outside a 3D session everything is original.** ReShade's DLLs stay in the game folder renamed (`*.depth3d-off`) and come
+  back only for a 3D launch; the game's resolution and scaling in Steam are restored as soon as the game closes.
+- **Uninstalling the plugin cleans up by itself.** While the plugin is loaded, its wrapper is in the launch options of 3D
+  games; it is removed when the plugin unloads and added back when it loads. At start the plugin launches a small guardian
+  process: if the plugin folder disappears and does not come back within 20 seconds (an update brings it back at once), it
+  removes ReShade from all games, restoring their original files, plus the gamescope script and the plugin's settings and
+  data folders. If Steam still holds a link to the wrapper, a stub stays in its place that just starts the game.
+  Log: `/tmp/depth3d-glasses-cleanup.log`.
 
-## Что делает
+### How the profile is found
 
-- **Сканирует установленные игры — и Steam, и сторонние (non-Steam).** Читает `libraryfolders.vdf`, `appmanifest_*.acf` и `shortcuts.vdf` активного аккаунта (Windows-игры, добавленные в Steam как сторонние и запускаемые через Proton), находит все `.exe`, считает для каждого тот же хэш, что ReShade подставляет в `__APPLICATION__`, и сверяет с таблицей профилей из `Overwatch.fxh`.
-- **Список обновляется сам** при запуске Steam (только новые и изменённые игры, это мгновенно). Кнопка «Обновить список игр» в панели — на случай, если игру только что добавили.
-- **Иконка очков на странице игры.** Цвет показывает статус: зелёный — профиль есть, жёлтый — профиль есть, но игра сетевая, красный — Depth3D пометил игру несовместимой, серый — игра известна, но профиля нет, синий — 3D уже установлен. Нажатие открывает окно установки.
-- **Список в боковой панели** и кнопка «Собрать коллекцию «3D Glasses»» — отдельная вкладка в библиотеке со всеми играми, где есть профиль.
-- **Установка в игру.** Кладёт рядом с exe `dxgi.dll` / `d3d9.dll` / `opengl32.dll` (ReShade нужной разрядности), `d3dcompiler_47.dll`, `ReShade.ini`, `ReShadePreset.ini` с включённым SuperDepth3D в режиме Side-by-Side и сам прописывает в параметры запуска обёртку плагина: `"~/homebrew/data/depth3d-glasses/bin/depth3d-run" <appid> %command%`. Если такие файлы в папке уже были, они сохраняются как `*.depth3d-bak` и возвращаются при удалении.
-- **3D или 2D при каждом запуске.** Обёртка смотрит, включено ли 3D для игры (переключатель «3D в этой игре» в окне игры) и на какой экран gamescope сейчас выводит картинку. Очки → 3D. Монитор или 3D выключено → обычное 2D **без ReShade**: перед запуском DLL ReShade переименовываются в `*.depth3d-off`, собственные файлы игры (если плагин их сохранял) возвращаются на место, в окружение ничего не добавляется — игра запускается так, будто плагина нет, без потери производительности. Это только переименования, занимают миллисекунды. Если папку игры поменять нельзя, запасной вариант — ReShade грузится, но через `RESHADE_BASE_PATH_OVERRIDE` получает пустой профиль. Свои переменные в параметрах запуска (`gamemoderun`, свой `WINEDLLOVERRIDES` и т.п.) сохраняются.
-- **Разрешение в 3D** выбирается в окне игры: 1920×1080 (960 px на глаз), 2560×1440 (1280), 3200×1800 (1600) или 3840×2160 (полные 1920 на глаз). SuperDepth3D рисует половинный SBS, поэтому чёткость в очках зависит от ширины рендера; вывод на очки всё равно 3840×1080. Ставится только на время 3D-запуска, в 2D возвращается обычное разрешение игры.
-- **SBS-сигнал для очков без режима 3840 в EDID (VITURE).** Такие очки включают 3D кнопкой (Luma: удерживать R1), но компьютеру по-прежнему сообщают только 1920×1080, хотя ждут 3840×1080. Плагин кладёт скрипт для gamescope (`~/.config/gamescope/scripts/depth3d-glasses.lua`), который умеет сгенерировать режим 3840×1080@60, и на время игры в 3D просит gamescope включить его. После выхода из игры вывод сам возвращается на обычный 1920×1080. Скрипт подхватывается после перезапуска игрового режима (кнопка в панели плагина, один раз).
-- **3D-режим очков и Steam.** Для очков, которые сами сообщают режим шириной 3840 в 3D, плагин переключает вывод Steam на 3840×1080 (как «Настройки → Дисплей → Разрешение») и возвращает прежний режим, когда очки снова в 2D. При запуске игры в 3D ей выставляется разрешение 1920×1080 и масштабирование «Растянуть» (SuperDepth3D рисует половинный SBS, каждая половина растягивается на глаз 1920×1080), при запуске в 2D возвращаются её прежние настройки.
-- **Определение экрана.** EDID активного выхода gamescope (`GAMESCOPE_PATCHED_EDID_FILE`, по умолчанию `~/.config/gamescope/edid.bin`) сверяется с подключёнными разъёмами в `/sys/class/drm`. Очки узнаются по имени в EDID: VITURE, XREAL/Nreal, Rokid, RayNeo. Любой другой экран можно пометить в панели кнопкой «Это мои XR-очки» (и наоборот). Если экранов несколько и gamescope не подсказал активный, считается монитор — 3D на монитор не попадёт.
-- **Удаление** возвращает папку игры в исходное состояние и убирает обёртку из параметров запуска.
-- **Вне 3D-сессии всё в исходном виде.** DLL ReShade лежат в папке игры переименованными (`*.depth3d-off`) и возвращаются только на время 3D-запуска; разрешение и масштабирование игры в Steam возвращаются, как только игра закрыта.
-- **Удаление плагина возвращает всё само.** Пока плагин загружен, его обёртка стоит в параметрах запуска игр с 3D; при выгрузке плагина она убирается, при загрузке ставится обратно. При старте плагин запускает маленький сторожевой процесс: если папка плагина исчезла и не вернулась за 20 секунд (обновление возвращает её сразу), он удаляет ReShade из всех игр с возвратом оригинальных файлов, скрипт gamescope и папки настроек и данных плагина. Если в настройках Steam всё же осталась ссылка на обёртку, на её месте остаётся заглушка, которая просто запускает игру. Журнал — `/tmp/depth3d-glasses-cleanup.log`.
+ReShade sets `__APPLICATION__ = std::hash<std::string>()(exe_name_without_extension) & 0xFFFFFFFF`. With MSVC that is FNV-1a:
+64-bit FNV-1a truncated to 32 bits for 64-bit games, 32-bit FNV-1a for 32-bit ones. The bitness comes from the PE header.
+Checked against the values in the real `Overwatch.fxh` (Borderlands 2, Oblivion, Cemu, PCSX2 and others).
 
-### Как определяется профиль
+## Install
 
-ReShade задаёт `__APPLICATION__ = std::hash<std::string>()(имя_exe_без_расширения) & 0xFFFFFFFF`. В MSVC это FNV-1a, поэтому для 64-битных игр это 64-битный FNV-1a, обрезанный до 32 бит, а для 32-битных — 32-битный FNV-1a. Разрядность берётся из PE-заголовка. Проверено на значениях из настоящего `Overwatch.fxh` (Borderlands 2, Oblivion, Cemu, PCSX2 и др.).
+Needs Decky Loader in Game Mode (gamescope-session: SteamOS, Bazzite, gamescope-session-plus). Nothing else to install.
 
-## Установка
+Download `depth3d-glasses-<version>.zip` from [Releases](../../releases) and use Decky → Settings → Developer →
+**Install Plugin from ZIP**.
 
-Нужен Decky Loader в игровом режиме (gamescope-session: SteamOS, Bazzite, gamescope-session-plus). Больше ничего ставить не надо.
-
-Сборка (Node 18+, pnpm):
+Building yourself (Node 18+, pnpm):
 
 ```bash
 pnpm install
 pnpm run build
+./scripts/package.sh            # out/depth3d-glasses.zip
+./scripts/deploy.sh user@host   # build and install on a Steam machine over SSH (no sudo needed)
 ```
 
-Или сразу архив: `./scripts/package.sh` → `out/depth3d-glasses.zip`.
+Or copy the folder to `~/homebrew/plugins/depth3d-glasses/` (needs `dist/`, `main.py`, `plugin.json`, `package.json`,
+`py_modules/`, `LICENSE`) and restart Decky: `sudo systemctl restart plugin_loader`.
 
-Дальше либо Decky → Настройки → Разработчик → «Установить плагин из ZIP» с этим архивом, либо скопировать папку в `~/homebrew/plugins/depth3d-glasses/` (нужны `dist/`, `main.py`, `plugin.json`, `package.json`, `py_modules/`, `LICENSE`) и перезапустить Decky:
+## Usage
 
-```bash
-sudo systemctl restart plugin_loader
-```
+1. Side panel → Depth3D Glasses → "Update game list". The first time the plugin downloads the Depth3D shaders.
+2. Open a game with the glasses icon → "Install 3D". The first install downloads ReShade and d3dcompiler_47.
+3. Switch the glasses to 3D with their button. Steam switches the output to 3840×1080. On a monitor, or with the glasses in
+   2D, the game starts in plain 2D.
+4. Start the game: the plugin sets it to 1920×1080 with "Stretch" scaling.
+5. The ReShade menu is the Home key. The Overwatch profile loads automatically; usually nothing needs tuning.
 
-## Использование
+## Limitations
 
-1. Боковая панель → Depth3D Glasses → «Сканировать библиотеку». В первый раз плагин скачает шейдеры Depth3D.
-2. Открой игру с иконкой очков → «Установить 3D». Первая установка скачивает ReShade и d3dcompiler_47.
-3. Включи 3D-режим очков кнопкой на очках. Steam сам переключит вывод на 3840×1080. На мониторе или с очками в 2D игра запустится в обычном 2D.
-4. Запусти игру: плагин выставит ей 1920×1080 и масштабирование «Растянуть».
-5. Меню ReShade — клавиша Home. Профиль Overwatch подхватится автоматически, вручную обычно ничего крутить не нужно.
+- **Games through Proton only**, on DX9/10/11/12 and OpenGL. The Vulkan build of ReShade does not work under Wine: if a game
+  has DX11/DX12, switch to it and pick the API in the install dialog.
+- **DX12** needs ReShade 6.8+ with add-on support (on by default). Works in most cases, check per game.
+- **Online games:** ReShade with add-ons may trip anti-cheat. Such games are marked yellow and can be hidden in the settings.
+- **An empty depth buffer** happens with upscalers and frame generation (FSR 4 on an RX 9060 XT too): turn them off in the
+  game if 3D does not appear.
+- **The icon on the game page** is injected the same way as ProtonDB Badges does and depends on Steam's UI internals. After a
+  big client update it may disappear; the plugin panel keeps working.
+- **The collection** uses Steam's internal `collectionStore`. If that API changes, the button shows an error; nothing else
+  depends on it.
+- **Switching the glasses to 3D** is manual for now, with the button on the glasses. The plugin shows which mode the glasses
+  are in (by the 3840×1080 mode in the EDID).
+- **A forced gamescope resolution** (`-W/-H/-r` in the session's launch options) gets in the way of switching the output:
+  gamescope prefers it over the mode chosen in Steam. Remove them for 3D.
+- **Display output, game resolution and scaling** are changed through Steam UI stores (`SystemDisplayManagerStore`,
+  `SystemPerfStore`); a Steam update may break this.
+- **Generic Depth Mod** (better depth buffer selection) is not installed automatically; ReShade's built-in Generic Depth is
+  used. GDM can be added by hand from the GPU Selector releases.
 
-## Ограничения
+## Licenses
 
-- **Только игры через Proton** на DX9/10/11/12 и OpenGL. Vulkan-версия ReShade под Wine не работает: если в игре есть DX11/DX12, переключи режим и выбери API в окне установки.
-- **DX12** требует ReShade 6.8+ с поддержкой аддонов (по умолчанию включено). Работает в большинстве случаев, но проверяй по играм.
-- **Онлайн-игры:** ReShade с аддонами может задеть античит. Такие игры помечены жёлтым, их можно скрыть в настройках.
-- **Пустой буфер глубины** бывает с апскейлерами и frame generation (FSR 4 на RX 9060 XT в том числе): отключи их в игре, если 3D не появляется.
-- **Иконка на странице игры** встраивается так же, как в ProtonDB Badges, и зависит от внутренностей интерфейса Steam. После крупного обновления клиента она может пропасть, но панель плагина продолжит работать.
-- **Коллекция** использует внутренний `collectionStore` Steam. Если API поменяется, кнопка покажет ошибку, остальное от этого не зависит.
-- **Переключение очков в 3D-режим** пока вручную, кнопкой на очках. Плагин показывает, в каком режиме очки сейчас (по режиму 3840×1080 в EDID).
-- **Принудительное разрешение gamescope** (`-W/-H/-r` в параметрах запуска сессии) мешает переключать вывод: gamescope предпочитает его режиму, выбранному в Steam. Для 3D их нужно убрать.
-- **Вывод экрана, разрешение и масштабирование игры** меняются через внутренние хранилища интерфейса Steam (`SystemDisplayManagerStore`, `SystemPerfStore`); после обновления Steam это может перестать работать.
-- **Generic Depth Mod** (улучшенный выбор буфера глубины) автоматически не ставится, используется встроенный Generic Depth ReShade. GDM можно положить вручную из релизов GPU Selector.
+The plugin's code is BSD-3-Clause.
 
-## Лицензии
+The plugin contains **no** Depth3D, ReShade or d3dcompiler files. They are downloaded on your computer from their official
+sources:
 
-Код плагина — BSD-3-Clause.
-
-В плагине **нет** файлов Depth3D, ReShade и d3dcompiler. Они скачиваются на твоём компьютере из официальных источников:
-
-- SuperDepth3D, Overwatch, AXAA, Sentinel — `raw.githubusercontent.com/BlueSkyDefender/Depth3D`. Depth3D бесплатен для личного использования, но проприетарен: распространять его, в том числе в составе утилит, без разрешения автора нельзя. Поэтому плагин качает файлы, а не включает их. Если захочешь публиковать плагин, например в магазине Decky, сначала свяжись с автором Depth3D.
+- SuperDepth3D, Overwatch, AXAA, Sentinel — `raw.githubusercontent.com/BlueSkyDefender/Depth3D`. Depth3D is free for personal
+  use but proprietary: it may not be redistributed, including as part of tools, without its author's permission. That is why
+  the plugin downloads the files instead of shipping them. Before publishing the plugin, e.g. in the Decky store, contact the
+  Depth3D author first.
 - ReShade — `reshade.me`.
-- `d3dcompiler_47.dll` (редистрибутив Microsoft) — из официального zip Electron 33.4.11 на GitHub с проверкой SHA-256. Читается только сам файл (HTTP range-запросы, ~2 МБ вместо 110 МБ), 7-Zip не нужен. Запасной источник — установщик Firefox 62 от Mozilla, если установлен 7-Zip.
+- `d3dcompiler_47.dll` (a Microsoft redistributable) — from the official Electron 33.4.11 zip on GitHub, SHA-256 checked. Only
+  that file is read (HTTP range requests, ~2 MB instead of 110 MB), no 7-Zip needed. Fallback: Mozilla's Firefox 62
+  installer, if 7-Zip is installed.
 
-## Тесты
+Not affiliated with VITURE, ReShade or BlueSkyDefender.
+
+## Tests
 
 ```bash
-python3 tests/test_backend.py                       # хэши, PE, VDF, парсер, установка/удаление на фейковой библиотеке
-OVERWATCH=/путь/к/Overwatch.fxh python3 tests/test_backend.py   # плюс настоящий Overwatch (лежит в shaders/ папки данных плагина в ~/homebrew/data/)
+python3 tests/test_backend.py                                   # hashes, PE, VDF, parser, install/remove on a fake library
+OVERWATCH=/path/to/Overwatch.fxh python3 tests/test_backend.py  # plus the real Overwatch (in shaders/ of the plugin's data folder)
+node --test tests/launchOptions.test.mjs
 ```
 
-## Структура
+## Layout
 
 ```
-main.py                    — API для фронтенда (scan, install_game, uninstall_game, …)
+main.py                    — API for the frontend (scan, install_game, uninstall_game, …)
 py_modules/depth3d/
-  hashing.py               — хэш __APPLICATION__ (FNV-1a 32/64)
-  pe.py                    — разрядность и импорты exe → какой DLL ставить
-  overwatch.py             — парсер таблицы профилей Overwatch.fxh
-  steamlib.py              — библиотеки Steam, манифесты, shortcuts.vdf (сторонние игры)
-  display.py               — активный экран gamescope, очки или монитор
-  launch.py                — обёртка запуска: выбор 3D/2D при каждом старте
-  scanner.py               — сопоставление игр с профилями
-  assets.py                — загрузка ReShade, d3dcompiler_47, шейдеров
-  installer.py             — установка/удаление в папке игры, ReShade.ini и пресет
+  hashing.py               — the __APPLICATION__ hash (FNV-1a 32/64)
+  pe.py                    — exe bitness and imports → which DLL to install
+  overwatch.py             — parser of the Overwatch.fxh profile table
+  steamlib.py              — Steam libraries, manifests, shortcuts.vdf (non-Steam games)
+  display.py               — gamescope's active display: glasses or monitor
+  gamescope.py             — the gamescope script and refresh-cycle client for 3840×1080 on VITURE-type glasses
+  launch.py                — the launch wrapper: 3D or 2D on every start
+  scanner.py               — matching games with profiles
+  assets.py                — downloading ReShade, d3dcompiler_47, the shaders
+  installer.py             — install/remove in the game folder, ReShade.ini and the preset
+  cleanup.py               — the uninstall guardian
 src/
-  index.tsx                — боковая панель
-  libraryPatch.tsx         — иконка очков на странице игры
-  GameModal.tsx            — окно установки
-  steam.ts                 — параметры запуска и коллекция через SteamClient
-  launchOptions.ts         — слияние параметров запуска (с тестом)
+  index.tsx                — side panel
+  libraryPatch.tsx         — glasses icon on the game page
+  GameModal.tsx            — install dialog
+  sbs.ts                   — Steam output and per-game settings for 3D launches
+  steam.ts                 — launch options and the collection through SteamClient
+  launchOptions.ts         — merging launch options (tested)
+  i18n.ts                  — English/Russian UI text
 ```

@@ -5,6 +5,7 @@ import { routerHook } from "@decky/api";
 import { useState } from "react";
 import { FaGlasses } from "react-icons/fa";
 import { STATUS_COLOR, STATUS_TEXT } from "./backend";
+import { tr } from "./i18n";
 import { openGameModal } from "./GameModal";
 import { launchMode, MODE_COLOR, MODE_TEXT, useDisplay, useGame } from "./store";
 
@@ -45,7 +46,7 @@ function GlassesBadge({ appid }: { appid: number }) {
         }}
       >
         <FaGlasses size={20} color={fg} style={{ opacity: focused ? 1 : 0.9 }} />
-        <span>{game.installed ? MODE_TEXT[mode] : STATUS_TEXT[game.status]}</span>
+        <span>{tr(game.installed ? MODE_TEXT[mode] : STATUS_TEXT[game.status])}</span>
         <span
           style={{
             width: 9, height: 9, borderRadius: "50%", background: dot, flex: "none", marginLeft: 2,

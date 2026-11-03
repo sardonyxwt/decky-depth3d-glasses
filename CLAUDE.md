@@ -1,59 +1,100 @@
-# CLAUDE.md — контекст проекта
+# CLAUDE.md — project context
 
-Decky Loader плагин для SteamOS / Steam Game Mode на Linux (Ubuntu + gamescope-session). Цель: помечать игры, у которых есть готовый профиль Depth3D (SuperDepth3D / Overwatch.fxh), и ставить в них ReShade + SuperDepth3D, чтобы играть в псевдо-3D (SBS) на XR-очках.
+A Decky Loader plugin for SteamOS / Steam Game Mode on Linux (Ubuntu + gamescope-session). Goal: mark games that have a
+ready Depth3D profile (SuperDepth3D / Overwatch.fxh) and install ReShade + SuperDepth3D into them, to play in pseudo-3D (SBS)
+on XR glasses.
 
-## Железо автора
-- XR-очки: VITURE Luma Pro (3D-режим = 3840×1080, full SBS: по 1920×1080 на глаз)
-- GPU: AMD Radeon RX 9060 XT (RADV, без CUDA/TensorRT)
-- Разработка на macOS (arm64), запуск на Linux-машине со Steam
+## Hardware it was built on
+- XR glasses: VITURE Luma Pro (3D mode = 3840×1080, full SBS: 1920×1080 per eye)
+- GPU: AMD Radeon RX 9060 XT (RADV, no CUDA/TensorRT)
+- Developed on macOS (arm64), run on a Linux machine with Steam
 
-## Структура
-- `main.py` — бэкенд Decky (класс `Plugin`, методы вызываются из фронта через `callable`)
-- `py_modules/depth3d/` — логика без зависимостей от Decky (только стандартная библиотека):
-  - `hashing.py` — `__APPLICATION__` ReShade = `std::hash<std::string>(exe_stem) & 0xFFFFFFFF`; в MSVC это FNV-1a: 64-битная игра → FNV-1a 64 обрезанный до 32 бит, 32-битная → FNV-1a 32. Проверено на хэшах из настоящего Overwatch.fxh.
-  - `pe.py` — разрядность exe и импорты (выбор dxgi / d3d9 / opengl32 / vulkan)
-  - `overwatch.py` — парсер блоков `#elif (App == 0x...) //Name`, флаги NPW / NDW / NCW
-  - `steamlib.py` — libraryfolders.vdf + appmanifest_*.acf + бинарный shortcuts.vdf (сторонние игры активного аккаунта, только `.exe`)
-  - `display.py` — активный экран: EDID из `GAMESCOPE_PATCHED_EDID_FILE` (через /proc/<gamescope>/environ, иначе `~/.config/gamescope/edid.bin`) сверяется с `/sys/class/drm`; очки — по имени в EDID или по пометке пользователя
-  - `gamescope.py` — SBS для очков, у которых в EDID нет 3840×1080 (VITURE Luma Pro: кнопка R1 переключает 3D, EDID не меняется). Lua-скрипт `~/.config/gamescope/scripts/depth3d-glasses.lua` описывает очки как known display с dynamic_refresh_rates (частоты 1920×1080 из EDID) и dynamic_modegen: частота-метка 59 (тоже в списке частот) → 3840×1080@60 с таймингом «два CEA 1080p60 рядом» (4400×1125, 297 МГц; CVT-RB давал полосу мусора сверху на Luma Pro), остальные → обычный 1080p. Обёртка на время 3D-игры просит у gamescope цикл обновления 59 через Wayland-протокол `gamescope_control.set_app_target_refresh_cycle` (флаги allow_refresh_switching | only_change_refresh_rate, клиент на stdlib в `gamescope.py`), повторяет каждую 1 с первые 30 с и потом каждые 3 с (Steam сбрасывает цикл при появлении окна игры и смене фокуса), после выхода отправляет 0. Свойство X11 `GAMESCOPE_DYNAMIC_REFRESH_EXTERNAL` в 3.16 не работает: gamescope перезаписывает его каждый кадр. Готовность проверяется у самого gamescope: событие `gamescope_control.active_display_info` (список частот активного экрана содержит 59 → скрипт загружен); если протокол недоступен — по времени файла скрипта. gamescope читает скрипты только при старте — нужен перезапуск сессии (кнопка в панели, `systemctl --user restart gamescope-session…`).
-  - `launch.py` — обёртка `depth3d-run <appid> %command%` (пишется в `DECKY_PLUGIN_RUNTIME_DIR/bin` при старте) и решение 3D/2D. 2D = DLL ReShade паркуются в `*.depth3d-off` (`installer.set_active`, флаг `active` в маркере), окружение не трогается; запасной режим `2d-profile` = `RESHADE_BASE_PATH_OVERRIDE` на пустой профиль `reshade-2d/`, если папку нельзя менять. Обёртка вызывает системный `python3` без `LD_LIBRARY_PATH` Steam
-  - `scanner.py` — сопоставление exe с профилями, маркер `depth3d-glasses.json` рядом с exe
-  - `assets.py` — загрузка ReShade (reshade.me), d3dcompiler_47 (из zip Electron 33.4.11 range-запросами, SHA-256; запасной — Firefox 62 + 7z), шейдеров Depth3D (raw.githubusercontent)
-  - `installer.py` — раскладка файлов в папку игры с бэкапом `*.depth3d-bak`, ReShade.ini, ReShadePreset.ini
-- `src/` — фронтенд (React, @decky/ui, @decky/api)
-  - `sbs.ts` — вывод Steam на 3840×1080, пока очки в 3D (`SystemDisplayManagerStore.SetMode`), и настройки игры на время 3D-запуска: `SetAppResolutionOverride` 1920×1080 (хук `RegisterForGameActionStart`) и масштабирование Stretch=5 через `SystemPerfStore` (после `RegisterForAppLifetimeNotifications`). Прежние значения — в `games.json` → `steam`.
-  - `libraryPatch.tsx` — бейдж очков на странице игры (routerHook.addPatch на `/library/app/:appid`, подход как у ProtonDB Badges; хрупко к обновлениям Steam)
-  - `GameModal.tsx`, `index.tsx`, `steam.ts` (SetAppLaunchOptions, collectionStore), `launchOptions.ts` (чистые функции)
+## Layout
+- `main.py` — Decky backend (`Plugin` class; the frontend calls its methods through `callable`)
+- `py_modules/depth3d/` — logic without Decky dependencies (standard library only):
+  - `hashing.py` — ReShade's `__APPLICATION__` = `std::hash<std::string>(exe_stem) & 0xFFFFFFFF`; with MSVC that is FNV-1a:
+    64-bit game → FNV-1a 64 truncated to 32 bits, 32-bit game → FNV-1a 32. Checked against hashes in the real Overwatch.fxh.
+  - `pe.py` — exe bitness and imports (choosing dxgi / d3d9 / opengl32 / vulkan)
+  - `overwatch.py` — parser of `#elif (App == 0x...) //Name` blocks, NPW / NDW / NCW flags
+  - `steamlib.py` — libraryfolders.vdf + appmanifest_*.acf + binary shortcuts.vdf (the active account's non-Steam games, `.exe` only)
+  - `display.py` — active display: the EDID from `GAMESCOPE_PATCHED_EDID_FILE` (through /proc/<gamescope>/environ, else
+    `~/.config/gamescope/edid.bin`) is matched against `/sys/class/drm`; glasses by EDID name or by the user's mark
+  - `gamescope.py` — SBS for glasses whose EDID has no 3840×1080 (VITURE Luma Pro: R1 toggles 3D, the EDID does not change).
+    The Lua script `~/.config/gamescope/scripts/depth3d-glasses.lua` describes the glasses as a known display with
+    dynamic_refresh_rates (the 1920×1080 rates from the EDID) and dynamic_modegen: the marker rate 59 (also in the list) →
+    3840×1080@60 with "two CEA 1080p60 side by side" timing (4400×1125, 297 MHz; CVT-RB gave a band of garbage at the top
+    on the Luma Pro), anything else → plain 1080p. While a 3D game runs, the wrapper asks gamescope for refresh cycle 59
+    through the Wayland protocol `gamescope_control.set_app_target_refresh_cycle` (flags allow_refresh_switching |
+    only_change_refresh_rate, a stdlib client in `gamescope.py`), repeating every 1 s for the first 30 s and then every 3 s
+    (Steam resets the cycle when the game window appears and on focus changes); after exit it sends 0. The X11 property
+    `GAMESCOPE_DYNAMIC_REFRESH_EXTERNAL` does not work in 3.16: gamescope overwrites it every frame. Readiness is checked with
+    gamescope itself: the `gamescope_control.active_display_info` event (the active display's rate list contains 59 → the
+    script is loaded); without the protocol, by the script file's time. gamescope reads scripts only at start — a session
+    restart is needed (a panel button, `systemctl --user restart gamescope-session…`).
+  - `launch.py` — the wrapper `depth3d-run <appid> %command%` (written to `DECKY_PLUGIN_RUNTIME_DIR/bin` at start) and the
+    3D/2D decision. 2D = ReShade DLLs parked as `*.depth3d-off` (`installer.set_active`, the `active` flag in the marker), the
+    environment untouched; the fallback `2d-profile` = `RESHADE_BASE_PATH_OVERRIDE` to the empty profile `reshade-2d/` when
+    the folder cannot be changed. The wrapper calls the system `python3` without Steam's `LD_LIBRARY_PATH`
+  - `scanner.py` — matching exes with profiles, the `depth3d-glasses.json` marker next to the exe
+  - `assets.py` — downloading ReShade (reshade.me), d3dcompiler_47 (from the Electron 33.4.11 zip by range requests, SHA-256;
+    fallback Firefox 62 + 7z), the Depth3D shaders (raw.githubusercontent)
+  - `installer.py` — laying out files in the game folder with `*.depth3d-bak` backups, ReShade.ini, ReShadePreset.ini
+- `src/` — frontend (React, @decky/ui, @decky/api)
+  - `sbs.ts` — Steam output at 3840×1080 while the glasses are in 3D (`SystemDisplayManagerStore.SetMode`), and the game's
+    settings for a 3D launch: `SetAppResolutionOverride` 1920×1080 (hook `RegisterForGameActionStart`) and Stretch=5 scaling
+    through `SystemPerfStore` (after `RegisterForAppLifetimeNotifications`). Previous values are kept in `games.json` → `steam`.
+  - `libraryPatch.tsx` — the glasses badge on the game page (routerHook.addPatch on `/library/app/:appid`, the ProtonDB Badges
+    approach; fragile across Steam updates)
+  - `GameModal.tsx`, `index.tsx`, `steam.ts` (SetAppLaunchOptions, collectionStore), `launchOptions.ts` (pure functions)
+  - `i18n.ts` — `t(english, russian)` / `tr([english, russian])`: Russian when the Steam client runs in Russian, else English
 
-## Команды
+## Commands
 ```bash
 pnpm install
 pnpm run typecheck
 pnpm run build                 # → dist/index.js
-python3 tests/test_backend.py  # тесты бэкенда (без сети, фейковая библиотека Steam)
-OVERWATCH=/path/Overwatch.fxh python3 tests/test_backend.py   # + проверка на настоящем Overwatch
-./scripts/package.sh           # → out/depth3d-glasses.zip для «Установить из ZIP» в Decky
-./scripts/deploy.sh user@host   # собрать и поставить на ПК по SSH без sudo (через Decky API и CEF-отладчик Steam)
+python3 tests/test_backend.py  # backend tests (no network, fake Steam library)
+OVERWATCH=/path/Overwatch.fxh python3 tests/test_backend.py   # + a check against the real Overwatch
+node --test tests/launchOptions.test.mjs
+./scripts/package.sh           # → out/depth3d-glasses.zip for Decky's "Install from ZIP"
+./scripts/deploy.sh user@host  # build and install over SSH without sudo (through the Decky API and Steam's CEF debugger)
 ```
 
-## Правила
-- **Depth3D проприетарен** (бесплатно для личного использования, без распространения). Нельзя коммитить SuperDepth3D.fx / Overwatch.fxh / Sentinel.fxh / AXAA.fxh в репозиторий и класть в сборку. Только скачивание на машине пользователя. Тесты используют синтетический Overwatch.
-- То же для ReShade DLL и d3dcompiler_47.dll — не коммитить.
-- Python-бэкенд работает в Python, который приносит Decky (PyInstaller): только стандартная библиотека, никаких pip-зависимостей. Для внешних утилит (`7z`) чистить `LD_LIBRARY_PATH` (см. `assets._clean_env`).
-- Плагин должен быть универсальным (для публикации): никаких привязок к машине автора и её скриптам. Бэкенд работает от пользователя (без флага root).
-- Состояние: `settings/games.json` (appid → exe, dll, enabled), `settings/settings.json` (+ `glasses_names` / `not_glasses_names`), `settings/scan.json` (кэш скана, ключ `stamp`). Лог решений обёртки — `data/launch.log`.
-- Удаление из папки игры трогает только файлы из маркера и только в той же папке.
-- В покое игра «ванильная»: после установки и после каждой 3D-сессии DLL паркуются (`*.depth3d-off`, флаг `active` в маркере); обёртка включает их только на 3D-запуск. Steam-настройки игры (разрешение, масштабирование) фронтенд возвращает при закрытии игры.
-- Удаление плагина: `_unload`/`_uninstall` ненадёжны (Decky вызывает uninstall и при обновлении из магазина, а плагин, не остановившийся за 5 с, убивает SIGKILL — на ПК автора так и было). Поэтому `_main` запускает сторожа (`cleanup.start_guardian`, отдельная сессия, копия пакета в /tmp, pid-файл в `$XDG_RUNTIME_DIR`): папка плагина пропала и не вернулась за 20 с → `full_cleanup`. Обёртку из параметров запуска убирает фронтенд в `onDismount` и возвращает при загрузке.
+## Rules
+- **Depth3D is proprietary** (free for personal use, no redistribution). Never commit SuperDepth3D.fx / Overwatch.fxh /
+  Sentinel.fxh / AXAA.fxh or put them into a build. Download on the user's machine only. Tests use a synthetic Overwatch.
+- The same for ReShade DLLs and d3dcompiler_47.dll — never commit them.
+- The Python backend runs in the Python Decky ships (PyInstaller): standard library only, no pip dependencies. Clear
+  `LD_LIBRARY_PATH` for external tools (`7z`) (see `assets._clean_env`).
+- The plugin must stay generic (it is published): nothing tied to one machine or its scripts; no machine-specific data in the
+  repository. The backend runs as the user (no root flag).
+- State: `settings/games.json` (appid → exe, dll, enabled), `settings/settings.json` (+ `glasses_names` / `not_glasses_names`),
+  `settings/scan.json` (scan cache, key `stamp`). The wrapper's decision log — `data/launch.log`.
+- Removing from a game folder touches only the files listed in the marker and only in that folder.
+- At rest a game is "vanilla": after install and after every 3D session the DLLs are parked (`*.depth3d-off`, the `active`
+  flag in the marker); the wrapper enables them only for a 3D launch. The frontend restores the game's Steam settings
+  (resolution, scaling) when the game closes.
+- Uninstalling the plugin: `_unload`/`_uninstall` are unreliable (Decky also calls uninstall on a store update, and a plugin
+  that does not stop within 5 s is SIGKILLed — seen on real hardware). So `_main` starts a guardian
+  (`cleanup.start_guardian`, its own session, a copy of the package in /tmp, a pid file in `$XDG_RUNTIME_DIR`): the plugin
+  folder gone and not back within 20 s → `full_cleanup`. The frontend removes the wrapper from launch options in
+  `onDismount` and adds it back on load.
 
-## Известные ограничения / что не проверено на железе
-- Бэкенд проверен на ПК автора без Decky (заглушка `decky`): скан Steam + сторонних игр, определение экрана, загрузка ReShade 6.8.0 и d3dcompiler_47, обёртка.
-- Не проверено в живом Steam: бейдж, коллекция, параметры запуска сторонних игр, что парковка DLL и запасной `RESHADE_BASE_PATH_OVERRIDE` под Proton дают чистое 2D.
-- Проверено на железе (2026-11-02): настоящее удаление плагина через Decky — сторож за ~20 с вернул файлы Stellar Blade, удалил скрипт gamescope и папки плагина, фронтенд убрал обёртку из параметров запуска. Отсюда добавлены удаление `ReShade.log` и возврат Steam-настроек в `onDismount`.
-- Проверено на железе (2026-11-02): скрипт грузится (`Got known display: depth3d_glasses_1`, ValidRefreshRates 60, 90, 120). Сам SBS-вывод в игре ещё не проверен.
-- gamescope выбирает режим так: `-W/-H/-r` → сохранённый режим из `GAMESCOPE_MODE_SAVE_FILE` (его пишет Steam) → предпочтительный из EDID. Поэтому сам по себе переход очков в 3D не даёт 3840×1080, если у очков остался 1920×1080 в списке.
-- Переключение режима очков 2D/3D пока вручную. План: официальный VITURE SDK (`libglasses.so`, `xr_device_provider_switch_dimension`), нужен доступ к hidraw.
-- Vulkan-игры под Proton: ReShade не работает (ограничение ReShade под Wine).
-- DX12 требует ReShade 6.8+ с аддонами.
+## Known limits / not yet verified on hardware
+- The backend was checked on real hardware without Decky (a `decky` stub): scanning Steam + non-Steam games, display
+  detection, downloading ReShade 6.8.0 and d3dcompiler_47, the wrapper.
+- Not verified in a live Steam: the badge, the collection, launch options of non-Steam games, that DLL parking and the
+  `RESHADE_BASE_PATH_OVERRIDE` fallback give clean 2D under Proton.
+- Verified on hardware: a real plugin uninstall through Decky — the guardian restored a game's files within ~20 s, removed
+  the gamescope script and the plugin folders, the frontend took the wrapper out of the launch options. That added removing
+  `ReShade.log` and restoring Steam settings in `onDismount`.
+- Verified on hardware: the script loads (`Got known display: depth3d_glasses_1`, ValidRefreshRates 60, 90, 120). The SBS
+  output inside a game is not verified yet.
+- gamescope picks its mode like this: `-W/-H/-r` → the saved mode from `GAMESCOPE_MODE_SAVE_FILE` (Steam writes it) → the
+  EDID's preferred mode. So the glasses switching to 3D does not by itself give 3840×1080 if 1920×1080 is still in their list.
+- Switching the glasses between 2D and 3D is manual for now. Plan: the official VITURE SDK (`libglasses.so`,
+  `xr_device_provider_switch_dimension`), needs hidraw access.
+- Vulkan games under Proton: ReShade does not work (a ReShade-under-Wine limitation).
+- DX12 needs ReShade 6.8+ with add-ons.
 
-Подробнее о направлениях развития — `docs/ROADMAP.md`.
+More on where this is heading — `docs/ROADMAP.md`.

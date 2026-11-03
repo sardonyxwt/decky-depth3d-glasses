@@ -94,12 +94,12 @@ export function launchMode(game: GameMatch | undefined, d: DisplayInfo | null): 
   return "3d";
 }
 
-export const MODE_TEXT: Record<LaunchMode, string> = {
-  "3d": "3D включён",
-  "2d-off": "3D выключен",
-  "2d-screen": "2D · монитор",
-  "2d-restart": "2D · нужен перезапуск",
-  none: "",
+export const MODE_TEXT: Record<LaunchMode, [string, string]> = { // [english, russian]
+  "3d": ["3D on", "3D включён"],
+  "2d-off": ["3D off", "3D выключен"],
+  "2d-screen": ["2D · monitor", "2D · монитор"],
+  "2d-restart": ["2D · restart needed", "2D · нужен перезапуск"],
+  none: ["", ""],
 };
 
 export const MODE_COLOR: Record<LaunchMode, string> = {

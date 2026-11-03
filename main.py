@@ -381,8 +381,8 @@ class Plugin:
                 if res.returncode == 0:
                     return {"ok": True, "unit": unit}
                 return {"ok": False, "error": res.stderr.strip() or f"cannot restart {unit}"}
-        return {"ok": False, "error": "Не нашёл сессию gamescope. Перезапусти игровой режим вручную "
-                                      "(выйди на рабочий стол и вернись или перезагрузи)."}
+        return {"ok": False, "error": "No gamescope session found. Restart Game Mode by hand "
+                                      "(switch to the desktop and back, or reboot)."}
 
     async def get_display(self) -> dict:
         try:

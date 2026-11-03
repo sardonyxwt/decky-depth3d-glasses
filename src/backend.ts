@@ -1,5 +1,7 @@
 import { callable } from "@decky/api";
 
+type Text = [string, string]; // [english, russian], shown with tr()
+
 export type ProfileStatus = "ok" | "network" | "not_compatible" | "no_profile";
 export type ReshadeDll = "dxgi" | "d3d9" | "opengl32" | "vulkan";
 
@@ -23,11 +25,11 @@ export interface GameMatch {
 
 export type SbsResolution = "1920x1080" | "2560x1440" | "3200x1800" | "3840x2160";
 
-export const SBS_RESOLUTION_TEXT: Record<SbsResolution, string> = {
-  "1920x1080": "1920×1080 — 960 px на глаз, быстро",
-  "2560x1440": "2560×1440 — 1280 px на глаз, ~1,8× нагрузки",
-  "3200x1800": "3200×1800 — 1600 px на глаз, ~2,8× нагрузки",
-  "3840x2160": "3840×2160 — 1920 px на глаз, ~4× нагрузки",
+export const SBS_RESOLUTION_TEXT: Record<SbsResolution, Text> = {
+  "1920x1080": ["1920×1080 — 960 px per eye, fast", "1920×1080 — 960 px на глаз, быстро"],
+  "2560x1440": ["2560×1440 — 1280 px per eye, ~1.8× the load", "2560×1440 — 1280 px на глаз, ~1,8× нагрузки"],
+  "3200x1800": ["3200×1800 — 1600 px per eye, ~2.8× the load", "3200×1800 — 1600 px на глаз, ~2,8× нагрузки"],
+  "3840x2160": ["3840×2160 — 1920 px per eye, ~4× the load", "3840×2160 — 1920 px на глаз, ~4× нагрузки"],
 };
 
 /** Steam settings of a game the plugin changed for a 3D launch, to put back for 2D. */
@@ -109,11 +111,11 @@ export const remember2dMode = callable<[name: string, mode: OutputMode], { ok: t
 export const markDisplay = callable<[name: string, kind: "glasses" | "screen" | "auto"], DisplayResult>("mark_display");
 export const setSetting = callable<[key: ToggleSetting, value: boolean], { ok: true; settings: Settings } | Fail>("set_setting");
 
-export const STATUS_TEXT: Record<ProfileStatus, string> = {
-  ok: "Профиль Depth3D есть",
-  network: "Профиль есть · онлайн-игра",
-  not_compatible: "Depth3D: не совместима",
-  no_profile: "Известна, но без профиля",
+export const STATUS_TEXT: Record<ProfileStatus, Text> = {
+  ok: ["Depth3D profile available", "Профиль Depth3D есть"],
+  network: ["Profile available · online game", "Профиль есть · онлайн-игра"],
+  not_compatible: ["Depth3D: not compatible", "Depth3D: не совместима"],
+  no_profile: ["Known, but no profile", "Известна, но без профиля"],
 };
 
 export const STATUS_COLOR: Record<ProfileStatus, string> = {
@@ -123,9 +125,9 @@ export const STATUS_COLOR: Record<ProfileStatus, string> = {
   no_profile: "#8b929a",
 };
 
-export const DLL_TEXT: Record<ReshadeDll, string> = {
-  dxgi: "DirectX 10/11/12 (dxgi.dll)",
-  d3d9: "DirectX 9 (d3d9.dll)",
-  opengl32: "OpenGL (opengl32.dll)",
-  vulkan: "Vulkan — под Proton не поддерживается",
+export const DLL_TEXT: Record<ReshadeDll, Text> = {
+  dxgi: ["DirectX 10/11/12 (dxgi.dll)", "DirectX 10/11/12 (dxgi.dll)"],
+  d3d9: ["DirectX 9 (d3d9.dll)", "DirectX 9 (d3d9.dll)"],
+  opengl32: ["OpenGL (opengl32.dll)", "OpenGL (opengl32.dll)"],
+  vulkan: ["Vulkan — not supported under Proton", "Vulkan — под Proton не поддерживается"],
 };
