@@ -1,0 +1,11 @@
+{
+  "name": "Depth3D Glasses",
+  "author": "Kyrylo",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": ["3d", "reshade", "xr-glasses", "sbs"],
+    "description": "Marks games that have a Depth3D (SuperDepth3D) profile and installs ReShade + SuperDepth3D for side-by-side 3D on XR glasses.",
+    "image": "https://opengraph.githubassets.com/1/BlueSkyDefender/Depth3D"
+  }
+}
