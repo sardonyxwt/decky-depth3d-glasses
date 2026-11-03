@@ -55,7 +55,7 @@ pnpm run typecheck
 pnpm run build                 # → dist/index.js
 python3 tests/test_backend.py  # backend tests (no network, fake Steam library)
 OVERWATCH=/path/Overwatch.fxh python3 tests/test_backend.py   # + a check against the real Overwatch
-node --test tests/launchOptions.test.mjs
+npx tsc src/launchOptions.ts src/ids.ts --outDir /tmp/lo --module es2020 --target es2020 --skipLibCheck --typeRoots ./none && node tests/launchOptions.test.mjs /tmp/lo
 ./scripts/package.sh           # → out/depth3d-glasses.zip for Decky's "Install from ZIP"
 ./scripts/deploy.sh user@host  # build and install over SSH without sudo (through the Decky API and Steam's CEF debugger)
 ```

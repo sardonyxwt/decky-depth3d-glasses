@@ -130,7 +130,7 @@ Not affiliated with VITURE, ReShade or BlueSkyDefender.
 ```bash
 python3 tests/test_backend.py                                   # hashes, PE, VDF, parser, install/remove on a fake library
 OVERWATCH=/path/to/Overwatch.fxh python3 tests/test_backend.py  # plus the real Overwatch (in shaders/ of the plugin's data folder)
-node --test tests/launchOptions.test.mjs
+npx tsc src/launchOptions.ts src/ids.ts --outDir /tmp/lo --module es2020 --target es2020 --skipLibCheck --typeRoots ./none && node tests/launchOptions.test.mjs /tmp/lo
 ```
 
 ## Layout
